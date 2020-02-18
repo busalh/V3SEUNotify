@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1058872166452",
+    "firebase_url": "https://myseuapp-2ba65.firebaseio.com",
+    "project_id": "myseuapp-2ba65",
+    "storage_bucket": "myseuapp-2ba65.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058872166452:android:f59359e278e646850f2261",
+        "android_client_info": {
+          "package_name": "com.example.android.SEUNotify"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1058872166452-87o2i0lsehpfe8q0716pvhmgj5vja1iv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIM_o-14T3qEqm-2ULppp5ngR54w9PGNo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1058872166452-87o2i0lsehpfe8q0716pvhmgj5vja1iv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
