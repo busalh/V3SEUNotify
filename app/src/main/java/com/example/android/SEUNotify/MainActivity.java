@@ -1,27 +1,31 @@
 package com.example.android.SEUNotify;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.app.Dialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.InputFilter;
-import android.text.TextWatcher;
+import android.os.Message;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Toolbar;
 
 import com.firebase.ui.auth.AuthUI;
-import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Continuation;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.ChildEventListener;
@@ -37,65 +41,80 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.android.SEUNotify.R.layout;
+
 public class MainActivity extends AppCompatActivity {
+
     private static final String TAG = "MainActivity";
 
     public static final String ANONYMOUS = "anonymous";
-    public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
     public static final int RC_SIGN_IN = 1;
-    private static final int RC_PHOTO_PICKER =  2;
+    private static final int RC_PHOTO_PICKER = 2;
 
-    private ListView mMessageListView;
-    private MessageAdapter mMessageAdapter;
     private ProgressBar mProgressBar;
-    private ImageButton mPhotoPickerButton;
-    private EditText mMessageEditText;
-    private Button mSendButton;
-    private String mUsername;
+    private Button addNewNotify;
     private FirebaseDatabase firebaseDatabase;
     private DatabaseReference databaseReference;
     private ChildEventListener childEventListener;
-    private FirebaseAuth fibaseAuth;
-    private FirebaseAuth.AuthStateListener authStateListener;
+    private FirebaseAuth firebaseAuth;
+    public FirebaseAuth.AuthStateListener authStateListener;
     private FirebaseStorage firebaseStorage;
     private StorageReference chatStorageReference;
+    private FirebaseUser user;
+    public String title, publishDate, bodyText, mUsername;
+    public Messages messages;
+
+    public ArrayList<Messages> seuMessages;
+    private RecyclerView mMessageView;
+    private MessageAdapter mMessageAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
+        setContentView(layout.activity_main);
         mUsername = ANONYMOUS;
-
         // Initialize references to views
-        mProgressBar = (ProgressBar) findViewById(R.id.progressBar);
-        mMessageListView = (ListView) findViewById(R.id.messageListView);
-      //  mPhotoPickerButton = (ImageButton) findViewById(R.id.photoPickerButton);
-      //  mMessageEditText = (EditText) findViewById(R.id.messageEditText);
-       // mSendButton = (Button) findViewById(R.id.sendButton);
+        mProgressBar = findViewById(R.id.progressBarList);
+        mMessageView = findViewById(R.id.messageRecyclerView);
+        addNewNotify = findViewById(R.id.sendButton);
+        //Initialize Firebase elements
         firebaseDatabase = FirebaseDatabase.getInstance();
         databaseReference = firebaseDatabase.getReference().child("messages");
-        fibaseAuth = FirebaseAuth.getInstance();
+        firebaseAuth = FirebaseAuth.getInstance();
         firebaseStorage = FirebaseStorage.getInstance();
-        chatStorageReference = firebaseStorage.getReference().child("chat_photos");
-        // Initialize message ListView and its adapter
-        List<Messages> messages = new ArrayList<>();
-        mMessageAdapter = new MessageAdapter(this, R.layout.item_list, messages);
-        mMessageListView.setAdapter(mMessageAdapter);
+        chatStorageReference = firebaseStorage.getReference().child("image_photo");
+        // Initialize messageRecycleView
+        seuMessages = new ArrayList<>();
+        mMessageAdapter = new MessageAdapter(seuMessages, this);
+        mMessageView.setLayoutManager(new LinearLayoutManager(this));
+        mMessageView.scrollToPosition(seuMessages.size());
+        mMessageView.setHasFixedSize(true);
 
+        addNewNotify.setVisibility(View.INVISIBLE);
+        messages = new Messages();
+        addNewNotify.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                displayInputDialog();
+            }
+        });
         // Initialize progress bar
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
 
         authStateListener = new FirebaseAuth.AuthStateListener() {
+
             @Override
             public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
-                FirebaseUser user = firebaseAuth.getCurrentUser();
-                if (user != null)
-                {
+                user = firebaseAuth.getCurrentUser();
+
+                if (user != null) {
                     onSignedInInitialize(user.getDisplayName());
-                }
-                else
-                {
+                } else {
                     onSignedOutCleanup();
                     startActivityForResult(
                             AuthUI.getInstance()
@@ -110,14 +129,58 @@ public class MainActivity extends AppCompatActivity {
         };
     }
 
+    private void displayInputDialog() {
+        final Dialog dialog = new Dialog(this);
+        dialog.setContentView(layout.activity_new_message);
+        dialog.setTitle("Add message");
+
+        final EditText titleEditText = dialog.findViewById(R.id.msgtext);
+        final EditText bodyEditText = dialog.findViewById(R.id.bodytxt);
+        final EditText dateEditText = dialog.findViewById(R.id.datetxt);
+        Button sendButton = dialog.findViewById(R.id.sendButton);
+        Button cancelButton = dialog.findViewById(R.id.cancelButton);
+        ImageButton imageButton = dialog.findViewById(R.id.photoPickerButton);
+        cancelButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                dialog.dismiss();
+            }
+        });
+        imageButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("image/jpeg");
+                intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+                startActivityForResult(Intent.createChooser(intent, "Complete action using"), RC_PHOTO_PICKER);
+            }
+        });
+
+        dialog.show();
+        sendButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                title = titleEditText.getText().toString();
+                publishDate = dateEditText.getText().toString();
+                bodyText = bodyEditText.getText().toString();
+                messages.setTitle(title);
+                messages.setTextMessage(bodyText);
+                messages.setDatePublish(publishDate);
+                databaseReference.push().setValue(messages);
+                Toast.makeText(MainActivity.this, "upload success", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            }
+        });
+
+    }
 
     @Override
     protected void onPause() {
         super.onPause();
         if (authStateListener != null) {
-            fibaseAuth.removeAuthStateListener(authStateListener);
+            firebaseAuth.removeAuthStateListener(authStateListener);
         }
-        mMessageAdapter.clear();
+
         detachDatabaseReadListener();
     }
 
@@ -125,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        fibaseAuth.addAuthStateListener(authStateListener);
+        firebaseAuth.addAuthStateListener(authStateListener);
     }
 
     @Override
@@ -137,26 +200,33 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Sign in canceled!", Toast.LENGTH_SHORT).show();
         } else if (requestCode == RC_PHOTO_PICKER && resultCode == RESULT_OK) {
             Uri selectedImageUri = data.getData();
-
-            // Get a reference to store file at chat_photos/<FILENAME>
             final StorageReference photoRef = chatStorageReference.child(selectedImageUri.getLastPathSegment());
+            UploadTask uploadTask = photoRef.putFile(selectedImageUri);
 
-            photoRef.putFile(selectedImageUri)
-                    .addOnSuccessListener(this, new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                        @Override
-                        public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                            //When the image has successfully uploaded, get its download URL
-                            photoRef.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
-                                @Override
-                                public void onSuccess(Uri uri) {
-                                    Uri dlUri = uri;
-                                    Messages messages = new Messages(null, mUsername, dlUri.toString());
-                                    databaseReference.push().setValue(messages);
-                                }
-                            });
-                        }
-                    });
+            Task<Uri> urlTask = uploadTask.continueWithTask(new Continuation<UploadTask.TaskSnapshot, Task<Uri>>() {
+                @Override
+                public Task<Uri> then(@NonNull Task<UploadTask.TaskSnapshot> task) throws Exception {
+                    if (!task.isSuccessful()) {
+                        throw task.getException();
+                    }
+
+                    return photoRef.getDownloadUrl();
+                }
+            }).addOnCompleteListener(new OnCompleteListener<Uri>() {
+                @Override
+                public void onComplete(@NonNull Task<Uri> task) {
+                    if (task.isSuccessful()) {
+                        Uri downloadUri = task.getResult();
+                        messages.setPhotoUrl(downloadUri.toString());
+                        databaseReference.push().setValue(messages);
+
+                    } else {
+                        Toast.makeText(MainActivity.this, "upload failed", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
         }
+
     }
 
     @Override
@@ -167,7 +237,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+        user.getDisplayName().toString();
         switch (item.getItemId()) {
             case R.id.sign_out_menu:
                 AuthUI.getInstance().signOut(this);
@@ -178,13 +254,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onSignedInInitialize(String username) {
-        mUsername = username;
-        attachDatabaseReadListener();
+
+        if (user.getDisplayName().contains("admin")) {
+            addNewNotify.setVisibility(View.VISIBLE);
+            mUsername = username;
+            attachDatabaseReadListener();
+        } else {
+            addNewNotify.setVisibility(View.INVISIBLE);
+            mUsername = username;
+            attachDatabaseReadListener();
+        }
+
     }
 
     private void onSignedOutCleanup() {
         mUsername = ANONYMOUS;
-        mMessageAdapter.clear();
+        seuMessages.clear();
         detachDatabaseReadListener();
     }
 
@@ -194,13 +279,22 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onChildAdded(DataSnapshot dataSnapshot, String s) {
                     Messages friendlyMessage = dataSnapshot.getValue(Messages.class);
-                    mMessageAdapter.add(friendlyMessage);
+                    // messages = dataSnapshot.getValue(Messages.class);
+                    seuMessages.add(friendlyMessage);
+                    mMessageView.setAdapter(mMessageAdapter);
                 }
 
-                public void onChildChanged(DataSnapshot dataSnapshot, String s) {}
-                public void onChildRemoved(DataSnapshot dataSnapshot) {}
-                public void onChildMoved(DataSnapshot dataSnapshot, String s) {}
-                public void onCancelled(DatabaseError databaseError) {}
+                public void onChildChanged(DataSnapshot dataSnapshot, String s) {
+                }
+
+                public void onChildRemoved(DataSnapshot dataSnapshot) {
+                }
+
+                public void onChildMoved(DataSnapshot dataSnapshot, String s) {
+                }
+
+                public void onCancelled(DatabaseError databaseError) {
+                }
             };
             databaseReference.addChildEventListener(childEventListener);
         }
@@ -212,5 +306,6 @@ public class MainActivity extends AppCompatActivity {
             childEventListener = null;
         }
     }
-
 }
+
+
